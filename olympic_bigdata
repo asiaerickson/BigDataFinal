@@ -1,0 +1,100 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+from sklearn.decomposition import PCA
+import seaborn as sns
+import numpy as np
+from sklearn.manifold import TSNE
+import time
+
+def load_data():
+    athletes_df = pd.read_csv("olympic_athletes.csv")
+    hosts_df = pd.read_csv("olympic_hosts.csv")
+    medals_df = pd.read_csv("olympic_medals.csv")
+    results_df = pd.read_csv("olympic_results.csv")
+    return athletes_df, hosts_df, medals_df, results_df
+
+# Load data
+athletes_df, hosts_df, medals_df, results_df = load_data()
+
+# Drop rows with missing values
+athletes_df.dropna(inplace=True)
+athlete_features = athletes_df[['games_participations', 'athlete_year_birth']]
+
+# Cluster analysis for athletes
+start_time = time.time()
+kmeans = KMeans(n_clusters=3, random_state=42)
+athlete_clusters = kmeans.fit_predict(athlete_features)
+end_time = time.time()
+print("Athlete Clustering Time:", end_time - start_time, "seconds")
+
+# Visualization for athletes
+colors = ['red', 'green', 'blue']
+for i in range(3):
+    plt.scatter(athletes_df[athlete_clusters == i]['games_participations'], athletes_df[athlete_clusters == i]['athlete_year_birth'], c=colors[i])
+plt.xlabel('Games Participations')
+plt.ylabel('Year of Birth')
+plt.title('Athlete Cluster Visualization')
+plt.savefig('(1)athlete-clusters.png')
+
+# Feature selection for hosts
+host_features = hosts_df[['game_year', 'game_location']]
+
+# Convert categorical variables to one-hot encoding
+game_year_encoded = pd.get_dummies(host_features['game_year'], prefix='game_year')
+game_location_encoded = pd.get_dummies(host_features['game_location'], prefix='game_location')
+
+# Concatenate the encoded features
+host_features_encoded = pd.concat([game_year_encoded, game_location_encoded], axis=1)
+
+# Perform PCA on the concatenated encoded features
+pca = PCA(n_components=2)
+host_features_pca = pca.fit_transform(host_features_encoded)
+
+# Cluster analysis for hosts after PCA
+kmeans_pca = KMeans(n_clusters=3, random_state=42)
+host_clusters_pca = kmeans_pca.fit_predict(host_features_pca)
+
+# Visualize host clusters after PCA
+plt.figure(figsize=(8, 6))
+sns.scatterplot(x=host_features_pca[:, 0], y=host_features_pca[:, 1], hue=host_clusters_pca, palette='viridis')
+plt.xlabel('PCA Component 1')
+plt.ylabel('PCA Component 2')
+plt.title('Host Cluster Visualization after PCA')
+plt.savefig('(2)host-clusters-pca.png')
+plt.show()
+
+# One-hot encode country_code
+medals_features_encoded = pd.get_dummies(medals_df['country_code'], prefix='country')
+
+# t-SNE for medals
+tsne = TSNE(n_components=2)
+X_tsne = tsne.fit_transform(medals_features_encoded)
+plt.clf()
+sns.scatterplot(x=X_tsne[:, 0], y=X_tsne[:, 1], hue=medals_df['medal_type'], palette="viridis")
+plt.xlabel('t-SNE Component 1')
+plt.ylabel('t-SNE Component 2')
+plt.title('t-SNE Visualization of Medals')
+plt.savefig('(3)medals-tsne.png')
+
+# Performance optimization (optional for demonstration)
+scaler = StandardScaler()
+pipeline = make_pipeline(scaler, kmeans)
+pipeline.fit(host_features_pca)
+labels_optimized = pipeline.predict(host_features_pca)
+
+# Check accuracy of labels
+accuracy = np.mean(labels_optimized == host_clusters_pca)
+print("Accuracy of Host labels after PCA:", accuracy)
+
+# Visualize host clusters
+plt.figure(figsize=(8, 6))
+plt.scatter(host_features_pca[:, 0], host_features_pca[:, 1], c=host_clusters_pca, cmap='viridis')
+plt.xlabel('PCA Component 1')
+plt.ylabel('PCA Component 2')
+plt.title('Host Clusters Distribution after PCA')
+plt.colorbar(label='Cluster')
+plt.savefig('(4)host_clusters_distribution_pca.png')
+plt.show()
